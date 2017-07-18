@@ -1,0 +1,314 @@
+"""
+edius字幕处理
+"""
+import json
+import time
+import codecs
+import xml.dom.minidom
+from collections import OrderedDict
+import xmltodict
+
+_char_width = 65  # 字符宽度
+_screen_width = 1920  # 屏幕宽度
+_last_elements4 = 0 # elements4初始值
+_last_x = 0 # X初始值
+
+
+def showdictinjson(dictstr):
+    """
+    以json格式输出字典
+    """
+    print(json.dumps(dictstr, indent=4))
+
+
+def getcreatetime(dictfile):
+    """
+    获取CreateTime
+    """
+    return dictfile["TitleDocument"]["CreateTime"]
+
+
+def setcreatetime(dictfile, value):
+    """
+    设定CreateTime
+    """
+    dictfile["TitleDocument"]["CreateTime"] = str(value)
+    return dictfile
+
+
+def getmstext(dictfile):
+    """
+    获取m_sText
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["m_sText"]
+
+
+def setmstext(dictfile, value):
+    """
+    设定m_sText
+    """
+    dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["m_sText"] = str(value)
+    return dictfile
+
+
+def getmsfontname(dictfile):
+    """
+    获取m_sFontName
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["m_sFontName"]
+
+
+def getelements4(dictfile):
+    """
+    获取elements4
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["elements4"]
+
+
+def setelements4(dictfile, value):
+    """
+    设定elements4
+    """
+    dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["elements4"] = str(value)
+    return dictfile
+
+
+def getx(dictfile):
+    """
+    获取X
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["TitleRectF"][1]["X"]
+
+
+def setx(dictfile, value):
+    """
+    设定X
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleRectF"][1]["X"] = str(value)
+    return dictfile
+
+
+def gety(dictfile):
+    """
+    获取Y
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["TitleRectF"][1]["Y"]
+
+
+def sety(dictfile, value):
+    """
+    设定Y
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleRectF"][1]["Y"] = str(value)
+    return dictfile
+
+
+def getwidth(dictfile):
+    """
+    获取Width
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["TitleRectF"][1]["Width"]
+
+
+def setwidth(dictfile, value):
+    """
+    设定Width
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleRectF"][1]["Width"] = str(value)
+    return dictfile
+
+
+def getheight(dictfile):
+    """
+    获取Height
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["TitleRectF"][1]["Height"]
+
+
+def setheight(dictfile, value):
+    """
+    设定Height
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleRectF"][1]["Height"] = str(value)
+    return dictfile
+
+
+def getmncharcount(dictfile):
+    """
+    获取m_nCharCount
+    """
+    return dictfile["TitleDocument"]["m_TitleObList"][
+        "CCtsTextObject"]["CCtsTitleObject"]["TitleCharInfo"]["m_nCharCount"]
+
+
+def setmncharcount(dictfile, value):
+    """
+    设定m_nCharCount
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["m_nCharCount"] = str(value)
+    return dictfile
+
+
+def settitlecharinfo(dictfile, value):
+    """
+    设定titlecharinfo
+    """
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"]["CCtsTitleObject"][
+        "TitleCharInfo"]["sFontName"] = str(value) + ";" + str(getmsfontname(dictfile)) + ";"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["bBold"] = str(value) + ";0;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["bItalic"] = str(value) + ";0;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["bUnderline"] = str(value) + ";0;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["iCharSpace"] = str(value) + ";0;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["iAveCharWidth"] = str(value) + ";31;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["iLineSpace"] = str(value) + ";0;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["iAveCharHeight"] = str(value) + ";83;"
+    dictfile["TitleDocument"]["m_TitleObList"]["CCtsTextObject"][
+        "CCtsTitleObject"]["TitleCharInfo"]["iSize"] = str(value) + ";48;"
+    return dictfile
+
+
+def opensample(samplefile1):
+    """
+    打开字幕样本文件，获取字幕中的规则，注意samplefile1是基准文件，也就是第一个字幕文件
+    """
+    global _last_x
+    global _last_elements4
+    with codecs.open("./sample/" + samplefile1, "r", "utf-16-le") as aimfile1:
+        aimline1 = aimfile1.read()
+    mydict1 = xmltodict.parse(aimline1)
+    _last_elements4 = float(getelements4(mydict1))
+    _last_x = float(getx(mydict1))
+
+
+def opensubtitles(subtitlefile):
+    """
+    读取字幕文件
+    """
+    with codecs.open(subtitlefile, "r", "gbk") as aimfile1:
+        aimlines = aimfile1.readlines()
+    aimlines = [x.strip() for x in aimlines]
+    aimlines = [x for x in aimlines if len(x) > 0]
+    return aimlines
+
+
+def recursivebuild(value, dom, root):
+    """
+    递归创建xml
+    """
+    for key1, value1 in value.items():
+        if isinstance(value1, OrderedDict):
+            rootchild = dom.createElement(key1)
+            recursivebuild(value1, dom, rootchild)
+            root.appendChild(rootchild)
+        elif isinstance(value1, list):
+            for value2 in value1:
+                if isinstance(value2, OrderedDict):
+                    rootchild = dom.createElement(key1)
+                    recursivebuild(value2, dom, rootchild)
+                    root.appendChild(rootchild)
+                else:
+                    if not value2:
+                        value2 = ""
+                    keychild = dom.createElement(key1)
+                    valuechild = dom.createTextNode(value2)
+                    keychild.appendChild(valuechild)
+                    root.appendChild(valuechild)
+        else:
+            if not value1:
+                value1 = ""
+            keychild = dom.createElement(key1)
+            valuechild = dom.createTextNode(value1)
+            keychild.appendChild(valuechild)
+            root.appendChild(keychild)
+
+
+def buildxml(basedict):
+    """
+    创建xml字幕
+    """
+    impl = xml.dom.minidom.getDOMImplementation()
+    for key, value in basedict.items():
+        dom = impl.createDocument(None, key, None)
+        root = dom.documentElement
+        recursivebuild(value, dom, root)
+    return dom
+
+
+def makesubtitle(basefile, subtitle, callcount, today):
+    """
+    导出字幕文件
+    """
+    global _char_width
+    global _screen_width
+    global _last_x
+    global _last_elements4
+    with codecs.open("./sample/" + basefile, "r", "utf-16-le") as basefile:
+        baseline = basefile.read()
+    basedict = xmltodict.parse(baseline)
+    mncharcount = len(subtitle)
+    setmstext(basedict, subtitle)
+    setcreatetime(basedict, time.strftime(
+        "%d/%m/%Y %H:%M:%S", time.localtime(time.time())))
+    setmncharcount(basedict, mncharcount)
+    newwidth = mncharcount * _char_width
+    setwidth(basedict, newwidth)
+    newx = (_screen_width - newwidth) / 2
+    setx(basedict, newx)
+    settitlecharinfo(basedict, mncharcount)
+    newelements4 = _last_elements4 + (newx - _last_x)
+    setelements4(basedict, newelements4)
+    _last_x = newx
+    _last_elements4 = newelements4
+    xmlfile = buildxml(basedict)
+    tempxml = xmlfile.toprettyxml()
+    xmllist = tempxml.split("\n")
+    xmllist.pop(0)
+    xmllist.insert(0, '<?xml version="1.0" encoding="UTF-16"?>')
+    xmllist.insert(1, "<!--Canopus Co., Ltd. Quick Titler-->")
+    xmlfile = "\n".join(xmllist)
+    newfile = open("./output/" + str(today) + "-" +
+                   str(callcount).zfill(4) + ".etl", "wb")
+    newfile.write(codecs.BOM_UTF16_LE)
+    newfile.close()
+    with codecs.open("./output/" + str(today) + "-" + str(callcount).zfill(4) + ".etl",
+                     "a", "utf-16-le") as writefile:
+        writefile.write(xmlfile)
+
+
+def mainworkflow():
+    """
+    主程序流程
+    """
+    basefile = "20161202-0000.etl"
+    opensample(basefile)
+    subtitles = opensubtitles("zimu.txt")
+    callcount = 0
+    today = time.strftime("%Y%m%d", time.localtime(time.time()))
+    for subtitle in subtitles:
+        makesubtitle(basefile, subtitle, callcount, today)
+        callcount = callcount + 1
+
+
+if __name__ == "__main__":
+    mainworkflow()
